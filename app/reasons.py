@@ -6,7 +6,9 @@ REASONS = {
   "STATE":"事件状态不符", "GAP":"采样缺口超限", "UNMAPPED":"未登记的业务编码",
   "EXPIRED":"已过有效期", "ORPHAN":"缺少关联记录", "OVERLAP":"有效区间重叠",
   "LIMIT":"业务阈值超限", "NEGATIVE":"出现负数", "CURVE":"曲线不满足单调条件",
-  "REVIEW":"存在待复核差异", "INCOMPLETE":"关键记录不完整"
+  "REVIEW":"存在待复核差异", "INCOMPLETE":"关键记录不完整",
+  "NO_SOURCE":"原批次缺少原始输入", "MISMATCH":"批次不属于同一谱系",
+  "STORE":"批次切换未完成", "NOT_FOUND":"批次不存在", "PARAMS":"参数格式错误"
 }
 def rejected(row, code, detail=""):
     return {"line":row.get("_line", ""), "key":row.get("id", row.get("event_id", "")),

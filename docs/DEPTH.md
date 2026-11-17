@@ -14,7 +14,7 @@
 | M4 支付归属 | 按有效租约归属支付 | `/api/m4` | `app/modules/m4_payments/rules.py` `app/modules/m4_payments/service.py` | `tests/test_m4_payments.py` |
 | M5 出票核验 | 检查支付及票号一致 | `/api/m5` | `app/modules/m5_tickets/rules.py` `app/modules/m5_tickets/service.py` | `tests/test_m5_tickets.py` |
 | M6 渠道对账 | 核对渠道金额与悬单 | `/api/m6` | `app/modules/m6_reconcile/rules.py` `app/modules/m6_reconcile/service.py` | `tests/test_m6_reconcile.py` |
-| M7 补传复核 | 补传回放和版本复核 | `/api/m7` | `app/modules/m7_replay/rules.py` `app/modules/m7_replay/service.py` | `tests/test_m7_replay.py` |
+| M7 补传复核 | 补传回放和版本复核 | `/api/m7` `POST /api/supplement/<批次>` | `app/modules/m7_replay/rules.py` `app/revision.py` `app/store.py` | `tests/test_m7_replay.py` `tests/test_m7_supplement.py` |
 
 ## 陷阱登记
 
@@ -28,11 +28,17 @@
 | TRAP-14 | 同版冲突 | 覆盖或重复售卖 | 事件时间回放并保留隔离证据 | `app/modules/m2_seats/rules.py` | `tests/test_m2_seats.py::test_real_conflict` |
 | TRAP-23 | 过期端点 | 覆盖或重复售卖 | 事件时间回放并保留隔离证据 | `app/modules/m3_leases/rules.py` | `tests/test_m3_leases.py::test_expiration_endpoint_reusable` |
 | TRAP-26 | 陈旧复核 | 覆盖或重复售卖 | 事件时间回放并保留隔离证据 | `app/store.py` | `tests/test_m7_replay.py::test_stale_review` |
+| TRAP-31 | 补传覆盖原回执 | 原地改写原批次，破坏历史租约/付款/票据证据 | 补传追加为新当前版本，原批次只读保留 | `app/revision.py` `app/store.py` | `tests/test_m7_supplement.py::test_supplement_creates_linked_current_version` |
+| TRAP-32 | 只存副本不切当前 | 另存副本而当前状态不变，失效票据仍可售 | 新版本行与谱系指针单事务切换席态/票据/悬单 | `app/store.py` `app/snapshot.py` | `tests/test_m7_supplement.py::test_supplement_switches_seats_tickets_and_pending_together` |
+| TRAP-33 | 重复补传增生版本 | 每次重试都新增 revision | 补传ID含谱系与内容，重试直接返回原批次 | `app/manifest.py` `app/revision.py` | `tests/test_m7_supplement.py::test_retrying_supplement_does_not_add_a_version` |
+| TRAP-34 | 切换失败半生效 | 新版本可读但席态/票据仍指旧版 | 单事务回滚，失败保留原状态并返回 STORE | `app/store.py` | `tests/test_m7_supplement.py::test_failed_switch_keeps_original_state` |
+| TRAP-35 | 落库中断失去当前指针 | 恢复后无当前版本或版本号冲突 | 读取时补建谱系、重排重复 revision | `app/store.py` | `tests/test_m7_supplement.py::test_interrupted_lineage_recovers` |
 
 ## 对账规则
 
 输入逻辑行数 = 采信行数 + 隔离行数；空行单列。每条重复、冲突、超限、缺失均保留原始行号与原因码。计算阶段的输出数量可聚合，原始采信records始终保留，业务平衡另按模块给出的重量、时长、电量或座席数量核对。
 相同输入摘要、规则版本、参数产生相同批次ID。运行原子插入SQLite；复核使用整数版本乐观锁。
+补传批次ID另含谱系根与补传内容，不含父版本，故同一补传重试归一到原批次。批次谱系以首次入库为 `root`、直接父批次为 `base`、整数 `revision` 递增；席态、票据有效性与渠道悬单由同一批次的回放结果派生，随当前指针一次性切换。切换失败不写批次行。
 
 ## 已知不覆盖
 
